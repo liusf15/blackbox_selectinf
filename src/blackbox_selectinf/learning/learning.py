@@ -1,17 +1,12 @@
 import numpy as np
-from numpy import exp, log, sqrt
-from numpy.linalg import inv
-from sklearn.linear_model import Lasso, LogisticRegression, LinearRegression
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
-import matplotlib.pyplot as plt
 from scipy.stats import norm
 from selectinf.distributions.discrete_family import discrete_family
 
 
-# build/train neural network, compute selection probability, compute p-value
 class Net(nn.Module):
     def __init__(self, input_dim):
         super().__init__()
@@ -36,7 +31,7 @@ class Net(nn.Module):
         return y
 
 
-def train_epoch(Z, W, net, opt, criterion, batch_size=50):
+def train_epoch(Z, W, net, opt, criterion, batch_size=500):
     """
     :param Z: predictors
     :param W: labels
@@ -46,6 +41,8 @@ def train_epoch(Z, W, net, opt, criterion, batch_size=50):
     :param batch_size: batch size
     :return: losses
     """
+    Z = torch.tensor(Z, dtype=torch.float)
+    W = torch.tensor(W, dtype=torch.float)
     net.train()
     losses = []
     for beg_i in range(0, Z.size(0), batch_size):
@@ -61,3 +58,36 @@ def train_epoch(Z, W, net, opt, criterion, batch_size=50):
         opt.step()
         losses.append(loss.data.numpy())
     return losses[-1]
+
+
+def learn_select_prob(Z_train, W_train, lr=1e-3, num_epochs=1000, batch_size=500, savemodel=False, modelname="model.pt"):
+    d = Z_train.shape[1]
+    net = Net(d)
+    opt = optim.Adam(net.parameters(), lr=lr)
+    criterion = nn.BCELoss()
+    e_losses = []
+    for e in range(num_epochs):
+        e_losses.append(train_epoch(Z_train, W_train, net, opt, criterion, batch_size))
+    if savemodel:
+        torch.save(net.state_dict(), modelname)
+    return net
+
+
+def get_weight(net, target_theta, N_0, gamma):
+    ll = target_theta.size
+    tmp = np.zeros(ll)
+    for j in range(ll):
+        tilde_d = N_0 + gamma @ target_theta[:, j].reshape(1, )
+        tilde_d = torch.tensor(tilde_d, dtype=torch.float)
+        tmp[j] = net(tilde_d)
+    return tmp
+
+
+def get_CI(target_val, weight_val, target_var, observed_target):
+    target_sd = np.sqrt(target_var)
+    weight_val_2 = weight_val * norm.pdf((target_val - observed_target) / target_sd)
+    exp_family = discrete_family(target_val.reshape(-1), weight_val_2.reshape(-1))
+    interval = exp_family.equal_tailed_interval(observed_target, alpha=0.05)
+    rescaled_interval = (interval[0] * target_var + observed_target,
+                         interval[1] * target_var + observed_target)
+    return rescaled_interval

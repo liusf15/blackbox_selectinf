@@ -10,7 +10,7 @@ class DropTheLoser(object):
         self.m = len(X_2)
         self.X_bar = np.mean(X, 1)
         self.win_idx = np.argmax(self.X_bar)
-        self.D_M = (np.sum(self.X[self.win_idx, :]) + np.sum(self.X_2)) / (self.n + self.m)
+        self.theta_hat = self.test_statistic(self.X, self.X_2)
 
     def basis(self, X_b, X_2_b, basis_type="naive"):
         """
@@ -42,6 +42,15 @@ class DropTheLoser(object):
         """
         d_M = (np.sum(X_b[self.win_idx, :]) + np.sum(X_2_b)) / (len(X_b[self.win_idx, :]) + len(X_2_b))
         return d_M
+
+    def D_0(self, X_b, X_2_b):
+        """
+        D_0 is assumed to have mean zero
+        :param X_b:
+        :param X_2_b:
+        :return:
+        """
+        pass
 
     def gen_train_data(self, ntrain, n_b, m_b, basis_type="naive", return_gamma=True):
         """
@@ -76,6 +85,9 @@ class DropTheLoser(object):
         if return_gamma:
             cov_Z_theta = (Z_train - np.mean(Z_train, 0)).T @ (theta_hat_train - np.mean(theta_hat_train, 0)) / ntrain
             var_theta = np.cov(theta_hat_train.T)
+            if var_theta.size == 1:
+                var_theta = var_theta.reshape(1, 1)
+                cov_Z_theta = cov_Z_theta.reshape(len(cov_Z_theta), 1)
             gamma = cov_Z_theta @ np.linalg.inv(var_theta)
             return Z_train, W_train, gamma
         return Z_train, W_train
