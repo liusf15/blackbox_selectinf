@@ -81,6 +81,7 @@ class DropTheLoser(object):
 
         Z_train = np.array(Z_train)
         W_train = np.array(W_train)
+        result = {'Z_train': Z_train, 'W_train': W_train}
         theta_hat_train = np.array(theta_hat_train)
         if return_gamma:
             cov_Z_theta = (Z_train - np.mean(Z_train, 0)).T @ (theta_hat_train - np.mean(theta_hat_train, 0)) / ntrain
@@ -89,8 +90,9 @@ class DropTheLoser(object):
                 var_theta = var_theta.reshape(1, 1)
                 cov_Z_theta = cov_Z_theta.reshape(len(cov_Z_theta), 1)
             gamma = cov_Z_theta @ np.linalg.inv(var_theta)
-            return Z_train, W_train, gamma
-        return Z_train, W_train
+            result['gamma'] = gamma
+            return result
+        return result
 
 
 

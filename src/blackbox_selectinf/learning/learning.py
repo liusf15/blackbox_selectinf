@@ -91,7 +91,6 @@ def get_weight(net, target_theta, N_0, gamma):
     if N_0.shape[0] != gamma.shape[0]:
         raise AssertionError("invalid shape of N_0 or gamma")
     ll = target_theta.shape[0]
-    print(target_theta.shape)
     tmp = np.zeros(ll)
     for j in range(ll):
         tilde_d = N_0 + gamma @ target_theta[j, :]
