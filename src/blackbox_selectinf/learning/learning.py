@@ -74,10 +74,27 @@ def learn_select_prob(Z_train, W_train, lr=1e-3, num_epochs=1000, batch_size=500
 
 
 def get_weight(net, target_theta, N_0, gamma):
-    ll = target_theta.size
+    """
+
+    :param net:
+    :param target_theta: shape (ll, num_select)
+    :param N_0:
+    :param gamma:
+    :return:
+    """
+    if target_theta.shape[1] == gamma.shape[1]:
+        pass
+    elif target_theta.shape[0] == gamma.shape[1]:
+        target_theta = target_theta.T
+    else:
+        raise AssertionError("invalid shape of target_theta")
+    if N_0.shape[0] != gamma.shape[0]:
+        raise AssertionError("invalid shape of N_0 or gamma")
+    ll = target_theta.shape[0]
+    print(target_theta.shape)
     tmp = np.zeros(ll)
     for j in range(ll):
-        tilde_d = N_0 + gamma @ target_theta[:, j].reshape(1, )
+        tilde_d = N_0 + gamma @ target_theta[j, :]
         tilde_d = torch.tensor(tilde_d, dtype=torch.float)
         tmp[j] = net(tilde_d)
     return tmp
