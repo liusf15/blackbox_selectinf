@@ -28,7 +28,7 @@ class DropTheLoser(object):
             Z_b[self.win_idx] = d_M
         elif basis_type == "withD0":
             Z_b = np.mean(X_b, 1)
-            Z_b = np.concatenate([Z_b, d_M])
+            Z_b = np.concatenate([Z_b, np.array(d_M).reshape(1, )])
         else:
             raise AssertionError("invalid basis_type")
         return Z_b
@@ -42,15 +42,6 @@ class DropTheLoser(object):
         """
         d_M = (np.sum(X_b[self.win_idx, :]) + np.sum(X_2_b)) / (len(X_b[self.win_idx, :]) + len(X_2_b))
         return d_M
-
-    def D_0(self, X_b, X_2_b):
-        """
-        D_0 is assumed to have mean zero
-        :param X_b:
-        :param X_2_b:
-        :return:
-        """
-        pass
 
     def gen_train_data(self, ntrain, n_b, m_b, basis_type="naive", return_gamma=True):
         """

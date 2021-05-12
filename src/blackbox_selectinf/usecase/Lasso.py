@@ -24,6 +24,7 @@ class LassoClass(object):
         self.beta_hat = self.lasso_l1.coef_.reshape(self.p)
         self.sign = np.sign(self.beta_hat)
         self.E = self.beta_hat != 0
+        self.s_E = self.sign[self.E]
         self.X_E = self.X[:, self.E]
         self.num_select = int(np.sum(self.E))
         if self.num_select == 0:
@@ -46,9 +47,9 @@ class LassoClass(object):
             self.W = np.diag(pr * (1 - pr))
 
         self.Sigma1 = np.linalg.inv(self.X_E.T @ self.W @ self.X_E)
-        self.G = self.X_E.T @ self.W @ self.X_E
+        self.G = self.X_E.T @ self.X_E
         self.G_inv = np.linalg.inv(self.G)
-        self.Sigma2 = self.X[:, ~self.E].T @ self.W @ self.X[:, ~self.E] - (self.X[:, ~self.E].T @ self.W @ self.X_E) @ self.G_inv @ (self.X_E.T @ self.W @ self.X[:, ~self.E])
+        self.Sigma2 = self.X[:, ~self.E].T @ self.W @ self.X[:, ~self.E] - (self.X[:, ~self.E].T @ self.W @ self.X_E) @ np.linalg.inv(self.X_E.T @ self.W @ self.X_E) @ (self.X_E.T @ self.W @ self.X[:, ~self.E])
         self.Sigma2 = self.Sigma2 / self.n
 
     def select(self, X_b, Y_b,):
@@ -69,10 +70,9 @@ class LassoClass(object):
         return np.concatenate([XY, XX])
 
     def linear_KKT(self, D_M, D_0):
-        s_E = self.sign[self.E]
-        tmp = D_M - self.G_inv @ s_E * self.lbd
-        t1 = np.all(np.sign(tmp) == s_E)
-        t2 = np.max(abs(self.X[:, ~self.E].T @ self.X_E @ self.G_inv @ s_E + 1 / self.lbd * D_0)) < 1
+        tmp = D_M - self.G_inv @ self.s_E * self.lbd
+        t1 = np.all(np.sign(tmp) == self.s_E)
+        t2 = np.max(abs(self.X[:, ~self.E].T @ self.X_E @ self.G_inv @ self.s_E + 1 / self.lbd * D_0)) < 1
         return t1 & t2
 
     def logistic_KKT(self, D_M, D_0):
@@ -150,6 +150,7 @@ class LassoClass(object):
             Z_train_indep = Z_train - D0_train @ gamma_D0.T
             result['Z_train'] = Z_train_indep
             result["gamma_D0"] = gamma_D0
+            result['D0_train'] = D0_train
         return result
 
 
@@ -178,6 +179,7 @@ class TwoStageLasso(object):
         self.beta_hat_1 = self.lasso_l1.coef_.reshape(self.p)
         self.sign = np.sign(self.beta_hat_1)
         self.E = self.beta_hat_1 != 0
+        self.s_E = self.sign[self.E]
         self.X_E_1 = self.X_1[:, self.E]
         self.num_select = int(np.sum(self.E))
         if self.num_select == 0:
@@ -205,13 +207,13 @@ class TwoStageLasso(object):
             self.W = np.diag(pr_hat * (1 - pr_hat))
             pr_hat_1 = 1 / (1 + np.exp(-self.X_E_1 @ self.beta_ls_1)).reshape(self.n)
             self.W1 = np.diag(pr_hat_1 * (1 - pr_hat_1))
-        self.G1 = self.X_E_1.T @ self.W1 @ self.X_E_1
+        self.G1 = self.X_E_1.T @ self.X_E_1
         self.G1_inv = np.linalg.inv(self.G1)
         self.Sigma1 = np.linalg.inv(self.X_E.T @ self.W @ self.X_E)
-        self.G = self.X_E.T @ self.W @ self.X_E
+        self.G = self.X_E.T @ self.X_E
         self.G_inv = np.linalg.inv(self.G)
         self.Sigma2 = self.X[:, ~self.E].T @ self.W @ self.X[:, ~self.E] - (
-                    self.X[:, ~self.E].T @ self.W @ self.X_E) @ self.G_inv @ (self.X_E.T @ self.W @ self.X[:, ~self.E])
+                    self.X[:, ~self.E].T @ self.W @ self.X_E) @ np.linalg.inv(self.X_E.T @ self.W @ self.X_E) @ (self.X_E.T @ self.W @ self.X[:, ~self.E])
         self.Sigma2 = self.Sigma2 / self.n
 
         if data_type == "linear":
@@ -229,19 +231,17 @@ class TwoStageLasso(object):
         return np.sign(beta_tmp)
 
     def linear_KKT(self, D_M, D_0):
-        s_E = self.sign(self.E)
-        tmp = D_M - self.G1_inv @ s_E * self.lbd
-        t1 = np.all(np.sign(tmp) == s_E)
-        t2 = np.max(abs(self.X_1[:, ~self.E].T @ self.X_E @ self.G1_inv @ s_E + 1 / self.lbd * D_0)) < 1
+        tmp = D_M - self.G1_inv @ self.s_E * self.lbd
+        t1 = np.all(np.sign(tmp) == self.s_E)
+        t2 = np.max(abs(self.X_1[:, ~self.E].T @ self.X_E_1 @ self.G1_inv @ self.s_E + 1 / self.lbd * D_0)) < 1
         return t1 & t2
 
     def logistic_KKT(self, D_M, D_0):
-        s_E = self.sign(self.E)
-        tmp = 1 / (1 + np.exp(-self.X_E @ D_M)) - self.lbd * self.X_E @ self.G_inv @ s_E
+        tmp = 1 / (1 + np.exp(-self.X_E_1 @ D_M)) - self.lbd * self.X_E_1 @ self.G1_inv @ self.s_E
         eta_hat = np.log(tmp / (1 - tmp))
         beta_hat = self.G_inv @ self.X_E.T @ eta_hat
-        t1 = np.all(np.sign(beta_hat) == s_E)
-        t2 = np.max(abs(self.X[:, ~self.E].T @ self.X_E @ self.G_inv @ s_E + 1 / self.lbd * D_0)) < 1
+        t1 = np.all(np.sign(beta_hat) == self.s_E)
+        t2 = np.max(abs(self.X_1[:, ~self.E].T @ self.X_E_1 @ self.G1_inv @ self.s_E + 1 / self.lbd * D_0)) < 1
         return t1 & t2
 
     def basis(self, X_b, Y_b):
@@ -288,7 +288,13 @@ class TwoStageLasso(object):
             X_b = np.concatenate([X_1_b, X_2_b])
             Y_b = np.concatenate([Y_1_b, Y_2_b])
             Z_train.append(self.basis(X_b, Y_b))
-            if np.all(self.select(X_b, Y_b) == self.sign):
+
+            # self.lr.fit(X_1_b[:, self.E], Y_1_b)
+            # beta_ls_b = self.lr.coef_.squeeze().reshape(-1)
+            # D0_b = X_1_b[:, ~self.E].T @ (Y_1_b - X_1_b[:, self.E] @ beta_ls_b)
+            # W_train.append(self.linear_KKT(beta_ls_b, D0_b))
+
+            if np.all(self.select(X_1_b, Y_1_b) == self.sign):
                 W_train.append(1)
             else:
                 W_train.append(0)
@@ -321,4 +327,5 @@ class TwoStageLasso(object):
             Z_train_indep = Z_train - D0_train @ gamma_D0.T
             result['Z_train'] = Z_train_indep
             result['gamma_D0'] = gamma_D0
+            result['D0_train'] = D0_train
         return result
