@@ -60,7 +60,7 @@ def train_epoch(Z, W, net, opt, criterion, batch_size=500):
     return losses[-1]
 
 
-def learn_select_prob(Z_train, W_train, lr=1e-3, num_epochs=1000, batch_size=500, savemodel=False, modelname="model.pt", verbose=False, print_every=1000):
+def learn_select_prob(Z_train, W_train, lr=1e-3, Z_data=None, num_epochs=1000, batch_size=500, savemodel=False, modelname="model.pt", verbose=False, print_every=1000):
     d = Z_train.shape[1]
     net = Net(d)
     opt = optim.Adam(net.parameters(), lr=lr)
@@ -68,8 +68,16 @@ def learn_select_prob(Z_train, W_train, lr=1e-3, num_epochs=1000, batch_size=500
     e_losses = []
     for e in range(num_epochs):
         e_losses.append(train_epoch(Z_train, W_train, net, opt, criterion, batch_size))
+        if Z_data is not None:
+            pr_data = net(Z_data)
+            if pr_data >= .99:
+                print("pr_data", pr_data, "stop training at epoch", e)
+                break
         if verbose and e % print_every == 0:
             print("Epochs {} out of {}, loss={}".format(e, num_epochs, e_losses[-1]))
+    if Z_data is not None:
+        pr_data = net(Z_data)
+        print("pr_data", pr_data)
     if savemodel:
         torch.save(net.state_dict(), modelname)
     return net
