@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class DropTheLoser(object):
+class DTL_corr(object):
     def __init__(self, X, X_2, selection='mean', uc=2):
         self.X = X
         self.X_2 = X_2
@@ -54,7 +54,7 @@ class DropTheLoser(object):
         d_0 = np.mean(X_b[self.win_idx, :]) - np.mean(X_2_b)
         return d_M, d_0
 
-    def gen_train_data(self, ntrain, n_b, m_b, basis_type="naive", return_gamma=True, remove_D0=False):
+    def gen_train_data(self, ntrain, n_b, m_b, basis_type="naive", return_gamma=True, remove_D0=False, blocklength=10):
         """
         bootstrap training data
         :param ntrain: number of training data
@@ -66,13 +66,23 @@ class DropTheLoser(object):
         theta_hat_train = []
         D0_train = []
         X_pooled = np.concatenate([self.X[self.win_idx], self.X_2])
+        num_blocks_1 = n_b // blocklength
+        num_blocks_2 = m_b // blocklength
         for i in range(ntrain):
-            X_b = np.zeros([self.K, n_b])
+            X_b = np.zeros([self.K, num_blocks_1 * blocklength])
             for k in range(self.K):
                 if k != self.win_idx:
-                    X_b[k, :] = self.X[k, np.random.choice(self.n, n_b, replace=True)]
+                    indices = np.random.choice(self.n - blocklength, num_blocks_1, replace=True)
+                    for s in range(num_blocks_1):
+                        idx = indices[s]
+                        data_block = self.X[k, idx: idx + blocklength]
+                        X_b[k, s * blocklength: (s + 1) * blocklength] = data_block
                 if k == self.win_idx:
-                    X_b[k, :] = X_pooled[np.random.choice(self.n + self.m, n_b, replace=True)]
+                    indices = np.random.choice(self.n + self.m - blocklength, num_blocks_1, replace=True)
+                    for s in range(num_blocks_1):
+                        idx = indices[s]
+                        data_block = X_pooled[idx: idx + blocklength]
+                        X_b[k, s * blocklength: (s + 1) * blocklength] = data_block
             if self.selection == 'mean':
                 idx = np.argmax(np.mean(X_b, 1))
             else:
@@ -81,21 +91,22 @@ class DropTheLoser(object):
                 W_train.append(1)
             else:
                 W_train.append(0)
-            X_2_b = X_pooled[np.random.choice(self.n + self.m, m_b, replace=True)]
+            indices = np.random.choice(self.n + self.m - blocklength, num_blocks_2, replace=True)
+            X_2_b = []
+            for s in range(num_blocks_2):
+                idx = indices[s]
+                X_2_b.extend(X_pooled[idx: idx + blocklength])
+            X_2_b = np.array(X_2_b)
             Z_train.append(self.basis(X_b, X_2_b, basis_type))
-            stat = self.test_statistic(X_b, X_2_b, return_D0=remove_D0)
-            if not remove_D0:
-                theta_hat_train.append(stat)
-            else:
-                theta_hat_train.append(stat[0])
-                D0_train.append(stat[1])
+            stat = self.test_statistic(X_b, X_2_b, return_D0=True)
+            theta_hat_train.append(stat[0])
+            D0_train.append(stat[1])
 
         Z_train = np.array(Z_train)
         W_train = np.array(W_train)
         result = {'Z_train': Z_train, 'W_train': W_train}
         theta_hat_train = np.array(theta_hat_train)
-        if remove_D0:
-            D0_train = np.array(D0_train).reshape(ntrain, 1)
+        D0_train = np.array(D0_train).reshape(len(D0_train), 1)
         if return_gamma:
             cov_Z_theta = (Z_train - np.mean(Z_train, 0)).T @ (theta_hat_train - np.mean(theta_hat_train, 0)) / ntrain
             var_theta = np.cov(theta_hat_train.T)

@@ -1,6 +1,8 @@
 import sys
 import numpy as np
 from sklearn.linear_model import Lasso, LinearRegression, LogisticRegression
+from regreg.smooth.glm import glm
+from selectinf.algorithms import lasso
 
 
 class LassoClass(object):
@@ -10,6 +12,7 @@ class LassoClass(object):
         self.lbd = lbd
         self.n = X.shape[0]
         self.p = X.shape[1]
+        self.data_type = data_type
         if data_type == "linear":
             self.alpha = lbd / self.n
         elif data_type == "binary":
@@ -52,6 +55,20 @@ class LassoClass(object):
         self.Sigma2 = self.X[:, ~self.E].T @ self.W @ self.X[:, ~self.E] - (self.X[:, ~self.E].T @ self.W @ self.X_E) @ np.linalg.inv(self.X_E.T @ self.W @ self.X_E) @ (self.X_E.T @ self.W @ self.X[:, ~self.E])
         self.Sigma2 = self.Sigma2 / self.n
 
+    def interval_lee(self):
+        # interval by Lee et al
+        if self.data_type == 'linear':
+            g = glm.gaussian(self.X, self.Y)
+        else:
+            g = glm.logistic(self.X, self.Y)
+        model = lasso.lasso(g, self.lbd)
+        model.fit()
+        summ = model.summary(compute_intervals=True)
+        interval_lee = np.zeros([self.num_select, 2])
+        interval_lee[:, 0] = summ.lower_confidence
+        interval_lee[:, 1] = summ.upper_confidence
+        return interval_lee
+
     def select(self, X_b, Y_b,):
         self.lasso_l1.fit(X_b, Y_b)
         beta_tmp = self.lasso_l1.coef_.reshape(self.p)
@@ -81,7 +98,10 @@ class LassoClass(object):
         eta_hat = np.log(tmp / (1 - tmp))
         beta_hat = self.G_inv @ self.X_E.T @ eta_hat
         t1 = np.all(np.sign(beta_hat) == s_E)
-        t2 = np.max(abs(self.X[:, ~self.E].T @ self.X_E @ self.G_inv @ s_E + 1 / self.lbd * D_0)) < 1
+        if D_0.size == 0:
+            t2 = True
+        else:
+            t2 = np.max(abs(self.X[:, ~self.E].T @ self.X_E @ self.G_inv @ s_E + 1 / self.lbd * D_0)) < 1
         return t1 & t2
 
     def test_statistic(self, X_b, Y_b, return_D0=False):
@@ -91,6 +111,7 @@ class LassoClass(object):
         :param X_2_b:
         :return:
         """
+        n_b = len(Y_b)
         self.lr.fit(X_b[:, self.E], Y_b)
         beta_ls_b = self.lr.coef_.squeeze()
         if self.num_select == 1:
@@ -98,7 +119,11 @@ class LassoClass(object):
         if not return_D0:
             return beta_ls_b
         else:
-            D0_b = X_b[:, ~self.E].T @ (Y_b - X_b[:, self.E] @ beta_ls_b) / np.sqrt(len(Y_b))
+            if self.data_type == 'linear':
+                D0_b = X_b[:, ~self.E].T @ (Y_b - X_b[:, self.E] @ beta_ls_b) / np.sqrt(len(Y_b))
+            else:
+                pr = 1 / (1 + np.exp(-X_b[:, self.E] @ beta_ls_b)).reshape(n_b)
+                D0_b = X_b[:, ~self.E].T @ (Y_b - pr) / np.sqrt(n_b)
             return beta_ls_b, D0_b
 
     def gen_train_data(self, ntrain, n_b, return_gamma=True, remove_D0=False):
@@ -164,6 +189,7 @@ class TwoStageLasso(object):
         self.p = X_1.shape[1]
         self.m = X_2.shape[0]
         self.lbd = lbd
+        self.data_type = data_type
         if data_type == "linear":
             self.alpha = lbd / self.n
         elif data_type == "binary":
@@ -257,6 +283,7 @@ class TwoStageLasso(object):
         :param X_2_b:
         :return:
         """
+        n_b = len(Y_b)
         self.lr.fit(X_b[:, self.E], Y_b)
         beta_ls_b = self.lr.coef_.squeeze()
         if self.num_select == 1:
@@ -264,7 +291,11 @@ class TwoStageLasso(object):
         if not return_D0:
             return beta_ls_b
         else:
-            D0_b = X_b[:, ~self.E].T @ (Y_b - X_b[:, self.E] @ beta_ls_b) / np.sqrt(len(Y_b))
+            if self.data_type == 'linear':
+                D0_b = X_b[:, ~self.E].T @ (Y_b - X_b[:, self.E] @ beta_ls_b) / np.sqrt(len(Y_b))
+            else:
+                pr = 1 / (1 + np.exp(-X_b[:, self.E] @ beta_ls_b)).reshape(n_b)
+                D0_b = X_b[:, ~self.E].T @ (Y_b - pr) / np.sqrt(n_b)
             return beta_ls_b, D0_b
 
     def gen_train_data(self, ntrain, n_b, m_b, return_gamma=True, remove_D0=False):
