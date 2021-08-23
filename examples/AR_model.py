@@ -8,8 +8,6 @@ import blackbox_selectinf.usecase.AR_model
 reload(blackbox_selectinf.usecase.AR_model)
 from blackbox_selectinf.learning.learning import (learn_select_prob, get_weight, get_CI)
 import argparse
-from argparse import Namespace
-import matplotlib.pyplot as plt
 import pickle
 from statsmodels.stats.stattools import durbin_watson
 
@@ -36,11 +34,6 @@ parser.add_argument('--verbose', action='store_true', default=False)
 parser.add_argument('--thre', type=float, default=0.99)
 parser.add_argument('--consec_epochs', type=int, default=5)
 args = parser.parse_args()
-
-#
-# args = Namespace(rho=0., n=100, p=10, n_b=100, batch_size=100, epochs=1000, idx=0, loadmodel=False,
-#                  logname='log_', modelname='model_', nrep=1, ntrain=1000,
-#                  savemodel=False, thre=1, consec_epochs=2, max_it=1, verbose=True, Q_L=1.9, Q_U=2.2, upper=True)
 
 
 def main():
@@ -140,7 +133,6 @@ def main():
         logs['width_nn'] = interval_nn[1] - interval_nn[0]
         logs['pvalue_nn'] = pvalue_nn
 
-        # interval_naive, pvalue_naive = get_CI(target_theta, np.ones(len(gamma_list)), target_var, theta_data, return_pvalue=True)
         interval_naive = tuple((norm.ppf(0.025) * target_sd, -norm.ppf(0.025) * target_sd)) + rho_hat
         print("interval_naive", interval_naive)
         logs['covered_naive'] = 0
