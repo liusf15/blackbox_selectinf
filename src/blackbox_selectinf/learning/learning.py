@@ -60,27 +60,80 @@ def train_epoch(Z, W, net, opt, criterion, batch_size=500):
     return losses[-1]
 
 
-def learn_select_prob(Z_train, W_train, lr=1e-3, Z_data=None, num_epochs=1000, batch_size=500, savemodel=False, modelname="model.pt", verbose=False, print_every=1000):
+def learn_select_prob(Z_train, W_train, lr=1e-3, Z_data=None, net=None, thre=.99, consec_epochs=2, num_epochs=1000, batch_size=500, savemodel=False, modelname="model.pt", verbose=False, print_every=1000):
     d = Z_train.shape[1]
-    net = Net(d)
+    if net is None:
+        net = Net(d)
     opt = optim.Adam(net.parameters(), lr=lr)
     criterion = nn.BCELoss()
     e_losses = []
+    count = 0
+    flag = 0  # indicate success of training
+    pr_data = None
     for e in range(num_epochs):
         e_losses.append(train_epoch(Z_train, W_train, net, opt, criterion, batch_size))
         if Z_data is not None:
             pr_data = net(Z_data)
-            if pr_data >= .99:
+            if pr_data >= thre:
+                count += 1
+            else:
+                count = 0
+            if count == consec_epochs:  # exceeds the threshold in 5 consecutive epochs
+                flag = 1
                 print("pr_data", pr_data, "stop training at epoch", e)
                 break
         if verbose and e % print_every == 0:
-            print("Epochs {} out of {}, loss={}".format(e, num_epochs, e_losses[-1]))
+            print("Epochs {} out of {}, loss={}, pr_data={}".format(e, num_epochs, e_losses[-1], pr_data))
+        if e_losses[-1] == 0.:
+            print("zero loss, break")
+            break
     if Z_data is not None:
         pr_data = net(Z_data)
-        print("pr_data", pr_data)
+        print("pr_data", pr_data.item())
     if savemodel:
         torch.save(net.state_dict(), modelname)
-    return net
+    if Z_data is None:
+        return net
+    else:
+        return net, flag, pr_data
+
+
+def check_learning(net, lassoClass, N_0, gamma, nb, maxiter):
+    X = lassoClass.X
+    Y = lassoClass.Y
+    n = lassoClass.n
+    num_select = lassoClass.num_select
+    target_var = np.diag(lassoClass.Sigma1)
+    target_sd = np.sqrt(target_var)
+    theta_data = lassoClass.test_statistic(X, Y)
+    gamma_list = np.linspace(-3 * target_sd, 3 * target_sd, 101)
+    n_b = n
+    count = 0
+    pval = [[] for x in range(num_select)]
+    for ell in range(maxiter):
+        idx_b = np.random.choice(n, n_b, replace=True)
+        X_b = X[idx_b, :]
+        Y_b = Y[idx_b]
+        if not np.all(lassoClass.select(X_b, Y_b) == lassoClass.sign):
+            continue
+        else:
+            count += 1
+            d_M = lassoClass.test_statistic(X_b, Y_b)
+            observed_target = d_M
+            for k in range(num_select):
+                target_theta_k = d_M[k] + gamma_list[:, k]
+                target_theta_0 = np.tile(d_M, [101, 1])
+                target_theta_0[:, k] = target_theta_k
+                weight_val_0 = get_weight(net, target_theta_0, N_0, gamma)
+                weight_val_2 = weight_val_0 * norm.pdf((target_theta_0[:, k] - observed_target[k]) / target_sd[k])
+                exp_family = discrete_family(target_theta_0.reshape(-1), weight_val_2.reshape(-1))
+                hypothesis = theta_data[k]
+                pivot = exp_family.cdf((hypothesis - observed_target[k]) / target_var[k], x=observed_target[k])
+                pivot = 2 * min(pivot, 1 - pivot)
+                pval[k].append(pivot)
+            if count == nb:
+                break
+        return pval
 
 
 def get_weight(net, target_theta, N_0, gamma):
@@ -109,11 +162,19 @@ def get_weight(net, target_theta, N_0, gamma):
     return tmp
 
 
-def get_CI(target_val, weight_val, target_var, observed_target):
+def get_CI(target_val, weight_val, target_var, observed_target, return_pvalue=False):
     target_sd = np.sqrt(target_var)
     weight_val_2 = weight_val * norm.pdf((target_val - observed_target) / target_sd)
     exp_family = discrete_family(target_val.reshape(-1), weight_val_2.reshape(-1))
-    interval = exp_family.equal_tailed_interval(observed_target, alpha=0.05)
+    try:
+        interval = exp_family.equal_tailed_interval(observed_target, alpha=0.05)
+    except:
+        interval = [np.nan, np.nan]
     rescaled_interval = (interval[0] * target_var + observed_target,
                          interval[1] * target_var + observed_target)
-    return rescaled_interval
+    if not return_pvalue:
+        return rescaled_interval
+    else:
+        pivot = exp_family.cdf((0 - observed_target) / target_var, x=observed_target)
+        pval = 2 * min(pivot, 1 - pivot)
+        return rescaled_interval, pval
