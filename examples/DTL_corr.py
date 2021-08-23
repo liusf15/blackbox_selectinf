@@ -1,3 +1,7 @@
+"""
+Drop-the-loser with correlated data
+"""
+
 from importlib import reload
 from blackbox_selectinf.usecase.DTL_corr import DTL_corr
 from blackbox_selectinf.learning.learning import (learn_select_prob, get_weight, get_CI)
@@ -33,8 +37,9 @@ parser.add_argument('--modelname', type=str, default='model_')
 parser.add_argument('--epochs', type=int, default=3000)
 parser.add_argument('--batch_size', type=int, default=100)
 parser.add_argument('--ntrain', type=int, default=5000)
-parser.add_argument('--logname', type=str, default='DTL_TS_')
+parser.add_argument('--logname', type=str, default='dtlts')
 parser.add_argument('--loadmodel', action='store_true', default=False)
+parser.add_argument('--nonnull', action='store_true', default=False)
 args = parser.parse_args()
 
 
@@ -47,11 +52,9 @@ def main():
     uc = args.uc
     selection = args.selection
     ntrain = args.ntrain
-    np.random.seed(13)
-    mu_list = np.random.rand(K) * 2 - 1  # mu: in the range [-1, 1]
-    mu_argsort = np.argsort(mu_list)
-    mu_list[mu_argsort[-2]] = mu_list[mu_argsort[-1]]
-    # mu_list[mu_argsort[-3]] = mu_list[mu_argsort[-1]]
+    mu_list = np.zeros(K)
+    if args.nonnull:
+        mu_list[:25] = .1
     m_dep = args.m_dep
     rho = 0.5
     blocklength = args.blocklength
@@ -96,7 +99,7 @@ def main():
         gamma = training_data['gamma']
 
         # train
-        net = learn_select_prob(Z_train, W_train, num_epochs=args.epochs, batch_size=args.batch_size)
+        net = learn_select_prob(Z_train, W_train, num_epochs=args.epochs, batch_size=args.batch_size, verbose=True)
         pr_data = net(torch.tensor(Z_data, dtype=torch.float))
         print('pr_data', pr_data)
         logs[j - args.idx]['pr_data'] = pr_data
@@ -105,7 +108,6 @@ def main():
             Z_data = Z_data - gamma_D0 @ DTL_class.D_0.reshape(1, )
         N_0 = Z_data - gamma @ theta_data.reshape(1, )
 
-        # target_var = 1 / (n_b + m_b)
         sigma_sq = m_dep ** 2
         var_M_true = (1 / (n + m)) * sigma_sq
         var_0_true = (1 / n - 1 / (n + m)) * sigma_sq
@@ -115,13 +117,14 @@ def main():
         target_theta = theta_data + gamma_list
         target_theta = target_theta.reshape(1, 101)
         weight_val = get_weight(net, target_theta, N_0, gamma)
-        interval_nn = get_CI(target_theta, weight_val, target_var, theta_data)
+        interval_nn, pvalue_nn = get_CI(target_theta, weight_val, target_var, theta_data, return_pvalue=True)
         logs[j - args.idx]['interval_nn'] = interval_nn
         if interval_nn[0] <= mu_list[DTL_class.win_idx] <= interval_nn[1]:
             logs[j - args.idx]['covered_nn'] = 1
         else:
             logs[j - args.idx]['covered_nn'] = 0
         logs[j - args.idx]['width_nn'] = interval_nn[1] - interval_nn[0]
+        logs[j - args.idx]['pvalue_nn'] = pvalue_nn
 
         ##################################################
         # check learning
@@ -196,19 +199,20 @@ def main():
                     tmp.append(np.sqrt(var_0) * np.random.randn(1)
                                + uc / np.sqrt(n - 1) * np.sqrt(np.random.chisquare(df=n - 1)))
                 prob_gamma_true.append(sum(tmp > max_rest - theta_data - gamma) / len(tmp))
-        interval_true = get_CI(target_val, np.squeeze(prob_gamma_true), target_var, observed_target)
+        interval_true, pvalue_true = get_CI(target_val, np.squeeze(prob_gamma_true), target_var, observed_target, return_pvalue=True)
         logs[j - args.idx]['interval_true'] = interval_true
         if interval_true[0] <= mu_list[DTL_class.win_idx] <= interval_true[1]:
             logs[j - args.idx]['covered_true'] = 1
         else:
             logs[j - args.idx]['covered_true'] = 0
         logs[j - args.idx]['width_true'] = interval_true[1] - interval_true[0]
+        logs[j - args.idx]['pvalue_true'] = pvalue_true
 
         plt.figure()
         plt.plot(target_val, weight_val, label="nn")
         plt.plot(target_val, prob_gamma_true, label="truth")
         plt.legend()
-        plt.savefig(args.logname + str(j) + '.png')
+        plt.savefig("{}_n_{}_m_{}_K_{}_nb_{}_{}.png".format(args.logname, n, m, K, n_b, j))
 
 
         ##################################################
@@ -222,10 +226,24 @@ def main():
         else:
             logs[j - args.idx]['covered_2'] = 0
         logs[j - args.idx]['width_2'] = interval_2[1] - interval_2[0]
+        pivot = norm.cdf(-np.mean(X_2) / np.sqrt(var_2))
+        logs[j - args.idx]['pvalue_2'] = 2 * min(pivot, 1 - pivot)
+
+        X_cat = np.concatenate([X[win_idx, :], X_2])
+        interval_naive = tuple((norm.ppf(0.025) * np.sqrt(var_M_true), -norm.ppf(0.025) * np.sqrt(var_M_true)) + np.mean(X_cat))
+        width_naive = -2 * norm.ppf(0.025) * np.sqrt(var_M_true)
+        logs[j - args.idx]['interval_naive'] = interval_naive
+        logs[j - args.idx]['width_naive'] = width_naive
+        if interval_naive[0] <= mu_list[DTL_class.win_idx] <= interval_naive[1]:
+            logs[j - args.idx]['covered_naive'] = 1
+        else:
+            logs[j - args.idx]['covered_naive'] = 0
+        pivot = norm.cdf(-np.mean(X_cat) / np.sqrt(var_M_true))
+        logs[j - args.idx]['pvalue_naive'] = 2 * min(pivot, 1 - pivot)
 
         logs[j - args.idx]['mu_true'] = mu_list[DTL_class.win_idx]
 
-        path = open(args.logname + str(j) + '.pickle', 'wb')
+        path = open("{}_n_{}_m_{}_K_{}_nb_{}_{}.pickle".format(args.logname, n, m, K, n_b, j), 'wb')
         pickle.dump(logs[j - args.idx], path)
         path.close()
     print(logs)
