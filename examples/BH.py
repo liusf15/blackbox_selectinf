@@ -34,12 +34,6 @@ parser.add_argument('--one_side', default=False, action='store_true')
 args = parser.parse_args()
 
 
-# args = Namespace(I=20, alpha=0.5, batch_size=100, cond_all=True, consec_epochs=5, epochs=1000,
-#                  idx=98, loadmodel=False, logname='log', max_it=1, modelname='model_', n=100,
-#                  n_b=100, nonnull=False, nrep=1, ntrain=1000, savemodel=False, thre=0.99,
-#                  verbose=True)
-
-
 def main():
     I = args.I
     n = args.n
@@ -183,48 +177,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# alpha_corrected = alpha * len(selected_group) / I
-# for i in selected_group:
-#     mt = multipletests(pvals[i, :], alpha=alpha_corrected, method='fdr_bh')
-#     rej = mt[0]
-#     selected_index[i, rej] = 1
-#     if np.sum(rej) == 0:
-#         # print(i, "no report")
-#         continue
-#     else:
-#         print(i)
-
-
-
-##
-# I = 100
-# n = 2
-# nrep = 500
-# groups_selected = []
-# num_reported = []
-# for r in range(nrep):
-#     X = np.random.randn(I, n)  # + mu
-#     pvals = 2 * (1 - norm.cdf(abs(X)))  # np.minimum(norm.cdf(X), 1 - norm.cdf(X)) * 2
-#     # pvals = np.random.rand(I, n)
-#     selected_group = np.where(np.min(pvals, 1) < 0.05)[0]
-#     groups_selected.append(len(selected_group) / I)
-#     alpha = 0.05
-#     alpha_corrected = alpha * len(selected_group) / I
-#
-#     tmp = []
-#     for i in selected_group:
-#         # rej = pvals[i, :] <= alpha / n * len(selected_group) / I
-#
-#         mt = multipletests(pvals[i, :], alpha=alpha_corrected, method='fdr_bh')
-#         rej = mt[0]
-#         tmp.append(np.sum(rej))
-#         # print(mt[0])
-#     num_reported.append(np.mean(tmp))
-# print(np.mean(groups_selected))
-# print(np.mean(num_reported))
-#
-# pvals = np.concatenate([np.random.rand(n // 2), np.random.rand(n // 2) * .1])
-# mt = multipletests(pvals=pvals, alpha=0.2, method='fdr_bh')
-# mt[0]
-# (mt[1] <= 0.2) * 1 - mt[0] * 1
+    

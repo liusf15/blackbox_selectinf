@@ -37,12 +37,6 @@ parser.add_argument('--fix_level', default=False, action='store_true')
 parser.add_argument('--nullneg', default=False, action='store_true')
 args = parser.parse_args()
 
-#
-# args = Namespace(I=10, alpha=0.6, batch_size=100, cond_all=False, consec_epochs=5, epochs=1000,
-#                  idx=1, loadmodel=False, logname='log', max_it=1, modelname='model_', n=100,
-#                  n_b=100, nonnull=False, nrep=1, ntrain=1000, savemodel=False, thre=0.99,
-#                  verbose=True, m=5, one_side=True)
-
 
 def main():
     I = args.I
@@ -80,11 +74,6 @@ def main():
         for t in selected_family:
             bh = multipletests(pvals[t, :], alpha_corrected, method='fdr_bh')
             selected_group[t, :] = bh[0]
-        # pvals_sort_index = np.argsort(pvals)
-        # pvals_sorted = pvals[pvals_sort_index]
-        # fdr_bh = multipletests(pvals_sorted, alpha, method='fdr_bh', is_sorted=True)
-        # selected_group = pvals_sort_index[np.where(fdr_bh[0])[0]]
-        # selected_group = np.sort(selected_group)
         num_selected = np.sum(selected_group)
         if num_selected < 1:
             print("select no group")
@@ -155,9 +144,6 @@ def main():
         logs['interval_nn'] = interval_nn
         logs['width_nn'] = width_nn
         logs['covered_nn'] = covered_nn
-        # logs['interval_true'] = interval_true
-        # logs['width_true'] = interval_true[:, 1] - interval_true[:, 0]
-        # logs['covered_true'] = covered_true
         logs['interval_naive'] = interval_naive
         logs['width_naive'] = width_naive
         logs['covered_naive'] = covered_naive
