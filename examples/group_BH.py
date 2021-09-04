@@ -13,7 +13,7 @@ import bisect
 parser = argparse.ArgumentParser(description='group BH')
 parser.add_argument('--idx', type=int, default=0)
 parser.add_argument('--n', type=int, default=100)
-parser.add_argument('--m', type=int, default=10)
+parser.add_argument('--m', type=int, default=5)
 parser.add_argument('--I', type=int, default=10)
 parser.add_argument('--alpha', type=float, default=0.5)
 parser.add_argument('--n_b', type=int, default=100)
@@ -32,7 +32,8 @@ parser.add_argument('--consec_epochs', type=int, default=5)
 parser.add_argument('--nonnull', default=False, action='store_true')
 parser.add_argument('--cond_all', default=False, action='store_true')
 parser.add_argument('--one_side', default=False, action='store_true')
-parser.add_argument('--mean', default=False, action='store_true')
+parser.add_argument('--selection', default='min', type=str)
+parser.add_argument('--select_thre', type=float, default=0.05)
 parser.add_argument('--fix_level', default=False, action='store_true')
 parser.add_argument('--nullneg', default=False, action='store_true')
 args = parser.parse_args()
@@ -43,6 +44,8 @@ def main():
     m = args.m
     n = args.n
     n_b = args.n_b
+    selection = args.selection
+    select_thre = args.select_thre
     ntrain = args.ntrain
     alpha = args.alpha
     sigma = 1
@@ -62,13 +65,13 @@ def main():
             pvals = norm.cdf(X_bar / sigma * np.sqrt(n))
         else:
             pvals = 2 * (1 - norm.cdf(abs(X_bar) / sigma * np.sqrt(n)))
-        if args.mean:
+        if selection == 'mean':
             pvals_group_min = np.mean(pvals, 1)
-            print(pvals_group_min)
-            selected_family = np.where(pvals_group_min <= 0.5)[0]
+        elif selection == 'median':
+            pvals_group_min = np.median(pvals, 1)
         else:
             pvals_group_min = np.min(pvals, 1)
-            selected_family = np.where(pvals_group_min <= 0.05)[0]
+        selected_family = np.where(pvals_group_min <= select_thre)[0]
         selected_group = np.zeros([m, I])
         alpha_corrected = alpha * len(selected_family) / m
         for t in selected_family:
@@ -90,7 +93,8 @@ def main():
         target_var = target_sd ** 2
 
         # generate training data
-        training_data = bh_class.gen_train_data(ntrain, n_b, selected_family, mean=args.mean, fix_level=args.fix_level)
+        training_data = bh_class.gen_train_data(ntrain, n_b, selected_family, selection=selection,
+                                                select_thre=select_thre, fix_level=args.fix_level)
         Z_train = training_data[0]
         W_train = training_data[1]
 
