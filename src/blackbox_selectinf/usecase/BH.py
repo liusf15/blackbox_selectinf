@@ -58,7 +58,7 @@ class group_BH(object):
         X_bar_b = np.mean(X_b, 2)
         return X_bar_b.reshape(-1)
 
-    def gen_train_data(self, ntrain, n_b, selected_family, mean=False, fix_level=False):
+    def gen_train_data(self, ntrain, n_b, selected_family, selection='min', select_thre=0.05, fix_level=False):
         I = self.I
         X = self.X
         n = self.n
@@ -76,12 +76,13 @@ class group_BH(object):
                 pvals_b = norm.cdf(X_bar_b / self.sigma * np.sqrt(n))
             else:
                 pvals_b = 2 * (1 - norm.cdf(abs(X_bar_b) / self.sigma * np.sqrt(n)))
-            if mean:
+            if selection == 'mean':
                 pvals_b_group_min = np.mean(pvals_b, 1)
-                selected_b = np.where(pvals_b_group_min <= 0.5)[0]
+            elif selection == 'median':
+                pvals_b_group_min = np.median(pvals_b, 1)
             else:
                 pvals_b_group_min = np.min(pvals_b, 1)
-                selected_b = np.where(pvals_b_group_min <= 0.05)[0]
+            selected_b = np.where(pvals_b_group_min <= select_thre)[0]
             s = 0
             if fix_level:
                 alpha_corrected = self.alpha * len(selected_family) / m

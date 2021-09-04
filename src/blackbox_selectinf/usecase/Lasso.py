@@ -280,7 +280,7 @@ class LassoClass(object):
         Gamma = np.zeros([Z_train.shape[1], self.p])
         for i in range(self.p):
             C_12 = (Z_train - np.mean(Z_train, 0)).T @ (theta_hat_train[:, i] - np.mean(theta_hat_train[:, i])) / ntrain
-            C_22 = np.cov(theta_hat_train[i, :])
+            C_22 = np.cov(theta_hat_train[:, i])
             C_12 = C_12.reshape(-1, 1)
             C_22 = C_22.reshape(1, 1)
             Gamma[:, i] = C_12 @ np.linalg.inv(C_22).reshape(1, )
