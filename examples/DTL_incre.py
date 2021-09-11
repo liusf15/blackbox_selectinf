@@ -16,8 +16,6 @@ import matplotlib.pyplot as plt
 import torch
 from selectinf.distributions.discrete_family import discrete_family
 from argparse import Namespace
-import seaborn as sns
-import pandas as pd
 
 
 parser = argparse.ArgumentParser(description='DTL')
@@ -46,11 +44,6 @@ parser.add_argument('--consec_epochs', type=int, default=2)
 parser.add_argument('--verbose', action='store_true', default=False)
 parser.add_argument('--max_it', type=int, default=1)
 args = parser.parse_args()
-
-args = Namespace(K=50, basis_type='naive', batch_size=100, epochs=1000, idx=14, indep=False, loadmodel=False,
-                 logname='log_', m=200, m_b=200, modelname='model_', n=1000, n_b=1000, nrep=1, ntrain=500,
-                 savemodel=False, selection='mean', uc=2, use_vae=False, nonnull=False, thre=0.99, consec_epochs=2,
-                 verbose=True, max_it=1)
 
 
 def main():
@@ -103,7 +96,7 @@ def main():
         Z_train = training_data['Z_train']
         W_train = training_data['W_train']
         gamma = training_data['gamma']
-        print(np.mean(W_train))
+        print("ones", np.mean(W_train))
 
         # if args.use_vae and np.mean(W_train) <= .1:
         #     print("Start generating more positive data")
@@ -249,7 +242,7 @@ def main():
         pval = np.array(pval)
         logs[j - args.idx]['pval'] = pval
         logs[j - args.idx]['false_rej'] = sum(pval <= 0.05) / len(pval)
-        print(pval)
+        # print(pval)
         print("reject:", sum(pval <= 0.05) / len(pval))
 
         # plot the cdf of pval
@@ -268,14 +261,13 @@ def main():
         plt.legend(fontsize=20)
         plt.xlabel('Observed pivot', fontsize=15)
         plt.ylabel('Empirical CDF', fontsize=15)
-        plt.savefig('DTL/pivot_{}_n_{}_m_{}_K_{}_nb_{}_{}.pdf'.format(args.logname, n, m, K, n_b, j))
+        plt.savefig('DTL/pivot_{}_n_{}_m_{}_K_{}_nb_{}_ntrain_{}_epoch_{}_{}.pdf'.format(args.logname, n, m, K, n_b, ntrain, args.epochs, j))
         plt.close()
 
         ##################################################
         # true interval
         var_0 = 1 / n - 1 / (n + m)
         observed_target = theta_data
-        # gamma_list = np.linspace(-20 / np.sqrt(n_b + m_b), 20 / np.sqrt(n_b + m_b), 101)
         target_val = gamma_list + theta_data
         prob_gamma_true = []
         for gamma_t in gamma_list:
@@ -300,7 +292,7 @@ def main():
         plt.plot(target_val, weight_val, label="nn")
         plt.plot(target_val, prob_gamma_true, label="truth")
         plt.legend()
-        plt.savefig("DTL/{}_n_{}_m_{}_K_{}_nb_{}_{}.png".format(args.logname, n, m, K, n_b, j))
+        plt.savefig("DTL/{}_n_{}_m_{}_K_{}_nb_{}_ntrain_{}_epoch_{}_{}.png".format(args.logname, n, m, K, n_b, ntrain, args.epochs, j))
 
         ##################################################
         # stage 2 interval
@@ -330,7 +322,7 @@ def main():
 
         logs[j - args.idx]['mu_true'] = mu_list[DTL_class.win_idx]
 
-        path = open("{}_n_{}_m_{}_K_{}_nb_{}_{}.pickle".format(args.logname, n, m, K, n_b, j), 'wb')
+        path = open("{}_n_{}_m_{}_K_{}_nb_{}_ntrain_{}_epoch_{}_{}.pickle".format(args.logname, n, m, K, n_b, ntrain, args.epochs, j), 'wb')
         pickle.dump(logs[j - args.idx], path)
         path.close()
     print(logs)
